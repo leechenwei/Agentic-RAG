@@ -1,0 +1,55 @@
+Dell Technologies Software Engineer Internship
+
+Position and Dates
+
+Chen Wei interned as a Software Engineer at Dell Technologies in
+Cyberjaya, Malaysia, from July 2024 through January 2025 — a six-month
+placement during his AI undergraduate program.
+
+The Product — Agentless Database Monitoring System
+
+The team owned an enterprise database monitoring system used internally
+to track the health, performance, and configuration drift of database
+fleets across Dell's infrastructure. The system was designed to be
+"agentless" — meaning it could observe target databases without
+requiring installation of monitoring agents on the database servers
+themselves. That choice eliminated a meaningful operational burden:
+client-side agent installation, version management, and the security
+review that comes with running additional code on production database
+hosts.
+
+Chen Wei's Contributions
+
+Working within the team, Chen Wei independently developed several key
+modules:
+
+- Multi-database support expansion. He extended the centralized
+  monitoring architecture to natively support three distinct database
+  engines, broadening what the platform could observe without requiring
+  per-database custom code on the client side. This eliminated manual
+  resource checks and made onboarding new database environments
+  significantly faster.
+
+- Real-time monitoring modules. The pieces he owned automated the
+  collection of infrastructure telemetry and performance metrics from
+  Oracle environments, surfacing them to the centralized observability
+  layer for dashboards and alerting.
+
+- Integrated alerting mechanism. He designed and implemented a critical
+  event categorization layer on top of the raw monitoring data. The
+  result was meaningfully improved resource visibility and faster
+  cross-team incident response when infrastructure faults occurred.
+
+What He Took Away
+
+The internship gave Chen Wei direct exposure to enterprise software
+engineering: working inside a large team's codebase, owning modules
+that ran against real production databases, designing for the
+operational realities of agentless monitoring (no helpful hooks, no
+ability to deploy code on the target), and thinking about alert
+fatigue when designing the categorization layer.
+
+The work is non-AI in character — pure backend systems engineering —
+and balances his later AI-heavy work at Inside Advisory. The
+combination demonstrates that Chen Wei can deliver in both AI
+application development and traditional enterprise software contexts.

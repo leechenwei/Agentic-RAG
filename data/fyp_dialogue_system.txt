@@ -1,0 +1,59 @@
+Final Year Project — Task-Oriented Dialogue System with Hybrid NLU Routing
+
+Overview
+
+For his Bachelor's final year project at University of Malaya, Chen Wei
+architected a multi-turn conversational AI assistant that combines
+classical rule-based NLU with a large language model fallback. The system
+holds task-oriented conversations — booking, scheduling, lookup-style
+flows — and gracefully handles ambiguous or out-of-scope user input.
+
+Stack
+
+The implementation is in Python on a Flask backend. The core conversation
+manager is a structured Dialogue State Tracker (DST) that maintains slot
+values across turns. A modular NLP pipeline performs intent classification
+and slot filling on every user message.
+
+The Hybrid NLU Routing Idea
+
+The crown jewel of the project is the routing strategy between two NLU
+backends:
+
+- Rasa NLU. A lightweight, locally-trained intent + entity model. Fast,
+  cheap, deterministic, and handles the vast majority of in-domain user
+  utterances. Latency is well under 100 ms.
+
+- LLM Fallback. When Rasa's confidence on intent classification falls
+  below a tuned threshold, or when the user's input doesn't match any
+  registered intent template, the system escalates to a large language
+  model. The LLM handles ambiguous phrasing, out-of-distribution
+  questions, and conversational repair turns that the rules-based model
+  cannot.
+
+Why This Pattern Matters
+
+Most LLM-powered chatbots route every query through the LLM. That is
+expensive, slow, and overkill for the 80 to 90 percent of user messages
+that are clean, on-topic, and easily classified. The hybrid pattern is
+the same principle behind cost-aware production AI systems: use the
+cheap path when you can, reserve the expensive path for genuinely hard
+cases. The dispatcher decides per-query — not the user, not a static
+config.
+
+Chen Wei reuses this same engineering judgment in his current production
+work at Inside Advisory, where retrieval routing decides per-query
+whether to invoke a multi-step agentic loop or a single short
+generation.
+
+What the Project Demonstrates
+
+- Hands-on NLU engineering — intent classification, slot filling, DST.
+- Architectural judgment about when to use an LLM and when not to.
+- Production-leaning thinking: cost, latency, reliability, fallback
+  behavior, all considered before the demo is built.
+
+This is the project that interview panels probe when they want to see
+whether a candidate can reason about LLM systems beyond "plug in OpenAI"
+— and it is reusable as a template for any task-oriented assistant where
+cost and latency matter.

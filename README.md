@@ -1,208 +1,142 @@
-# Agentic RAG
+# Self-Evaluating Agentic RAG
 
-A minimal but production-shaped Agentic Retrieval-Augmented Generation system.
-The LLM is given a `retrieve` tool and decides *when*, *what*, and *how many
-times* to call it — enabling query rewriting, multi-step retrieval, and honest
-refusal when the corpus contains no answer.
+A production-shaped Retrieval-Augmented Generation chatbot **with a built-in
+evaluation workflow**. Users curate a golden Q&A dataset alongside their
+documents, run regression-style evaluations on demand, and track metric
+deltas across configuration changes — so "is the chatbot still accurate?"
+stops being a vibe check and becomes a number you can graph.
 
-Built as a tech-test submission for the MaiStorage AI Engineer role.
-
----
-
-## What it does
-
-- Ingests `.pdf`, `.txt`, `.md` files into a local vector database
-- Answers questions over the indexed corpus with inline citations
-- Shows the agent's reasoning trace — query rewrites, retrieval rounds, scores
-- Supports live document upload and deletion through the UI
-- Includes an evaluation suite with retrieval recall@k and refusal tests
-
----
-
-## Quickstart
-
-```bash
-# 1. Clone and enter
-git clone <your-repo-url> && cd agentic_rag
-
-# 2. Install dependencies (Python 3.11+)
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# 3. Add your Gemini API key
-cp .env.example .env
-# edit .env and set GEMINI_API_KEY=...
-
-# 4. Ingest the sample corpus
-python -m rag.ingest
-
-# 5. Launch the UI
-streamlit run app.py
-# → http://localhost:8501
-```
-
-Get a free Gemini API key at <https://aistudio.google.com/apikey>.
+> **The interview question this answers:** *"How do you make sure the RAG
+> stays relevant as you tune chunking, embeddings, prompts, or models?"*
+> You curate a golden dataset, you measure Hit@k / MRR / faithfulness on
+> every change, and you persist runs to a history that highlights
+> regressions. **This app makes that workflow visible to users.**
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                  Streamlit UI (app.py)                  │
-│  · Chat interface                                       │
-│  · Sidebar: upload, list, delete documents              │
-│  · Agent trace panel with citations                     │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-       ┌───────────────▼────────────────┐
-       │      Agent Loop (rag/agent.py) │  ◄── Gemini 2.5 Flash
-       │                                │      (function calling)
-       │   while not done:              │
-       │     LLM → wants to retrieve?   │
-       │       └→ call retriever        │
-       │     else → return answer       │
-       └───────────────┬────────────────┘
-                       │
-       ┌───────────────▼────────────────┐
-       │   Retriever (rag/retriever.py) │
-       │   · retrieve(query, k)         │
-       │   · list_sources()             │
-       │   · delete_source(name)        │
-       └───────────────┬────────────────┘
-                       │
-       ┌───────────────▼────────────────┐
-       │      ChromaDB (local disk)     │
-       │   · 384-dim vectors (MiniLM)   │
-       │   · HNSW index, cosine space   │
-       │   · source + chunk_index meta  │
-       └───────────────▲────────────────┘
-                       │  one-time / on upload
-       ┌───────────────┴────────────────┐
-       │     Ingest (rag/ingest.py)     │
-       │   files → chunk (500/80)       │
-       │         → embed (MiniLM)       │
-       │         → upsert with hash IDs │
-       └────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      Streamlit UI (app.py)                       │
+│  💬 Chat   📚 KB   🎯 Eval Dataset   📊 Run Eval   📈 History    │
+└──────────────────┬──────────────────────────────────┬───────────┘
+                   │ chat                              │ eval
+       ┌───────────▼────────────┐         ┌────────────▼──────────┐
+       │   Streaming Agent      │         │   Eval Runner         │
+       │   (rag/agent.py)       │         │   (eval/runner.py)    │
+       │   Gemini 2.5 Flash     │         │   Hit@k / MRR /       │
+       │   tool: retrieve()     │         │   keyword / refusal   │
+       └───────────┬────────────┘         └────────────┬──────────┘
+                   │                                    │
+                   └────────────────┬───────────────────┘
+                                    ▼
+                  ┌─────────────────────────────────┐
+                  │      Retrieval Pipeline         │
+                  │   (rag/retriever.py)            │
+                  │                                 │
+                  │  Dense  ┐                       │
+                  │  (Chroma + MiniLM 384-d)        │
+                  │         ├─► RRF fuse ─► Rerank  │
+                  │  BM25   ┘   (k=60)     (BGE)    │
+                  │  (rag/bm25_store.py)            │
+                  │                                 │
+                  │   → top-K parent blocks → LLM   │
+                  └─────────────────────────────────┘
+                                    ▲
+                                    │
+                  ┌─────────────────┴───────────────┐
+                  │   Per-session Chroma (ephemeral) │
+                  │   (rag/session.py)               │
+                  │   · Parent-child chunking         │
+                  │   · Multi-tenant safe             │
+                  └─────────────────────────────────┘
 ```
 
-Each layer owns one responsibility and depends only inward. Swapping ChromaDB
-for Qdrant touches one file (`retriever.py` + `ingest.py`); swapping Gemini for
-Claude touches only `agent.py`; swapping Streamlit for FastAPI touches only
-`app.py`.
+---
+
+## Features
+
+### Retrieval
+- **Hybrid search** — dense vector (ChromaDB + `all-MiniLM-L6-v2`, 384 dims) + BM25 lexical, fused via Reciprocal Rank Fusion (k=60)
+- **Cross-encoder reranker** — `BAAI/bge-reranker-base` re-scores the top-20 candidates jointly with the query, narrowing to top-K most relevant
+- **Parent-child chunking** — small children for retrieval precision (256 tokens), larger parents for LLM context (1024 tokens), via LangChain's `RecursiveCharacterTextSplitter`
+- **HNSW index** with cosine similarity for sub-millisecond ANN
+
+### Agentic loop
+- Gemini 2.5 Flash with function-calling — the LLM decides when to retrieve, what query to use, whether to retrieve again, and when to answer
+- **Streaming output** — tokens appear as they arrive (peek-then-stream architecture)
+- Multi-step retrieval with query rewriting and honest refusal
+
+### Self-evaluation (the differentiator)
+- **User-curated golden dataset** — add Q&A pairs in the UI, JSON export/import for portability
+- **Metrics** — Hit@k, Mean Reciprocal Rank, keyword pass rate, refusal accuracy
+- **Run history** — timestamped, configuration-snapshotted, with deltas vs the previous run highlighted
+- **Two-stage eval** — fast retrieval-only (free, no LLM calls) + slower agent-end-to-end (uses LLM quota)
+
+### Privacy + deploy
+- **Per-session multi-tenancy** — ephemeral in-memory ChromaDB per browser session, isolated from other users
+- **BYOK** — users paste their own Gemini API key, validated on submission, stored in session only (never disk, never logs)
+- **Zero server-side persistence** — refresh = clean slate; users export their dataset/history as JSON if they want to save
+- **Sample preload** — one-click "Load sample docs" + "Load sample eval set" for instant demo
 
 ---
 
-## Why Agentic RAG (vs the alternatives)
+## Live demo
 
-| | Naive RAG | Advanced RAG | **Agentic RAG (this)** | Graph RAG |
-|---|---|---|---|---|
-| Retrieval | Always, once | Always, once + rerank | **LLM decides via tool call** | Graph traversal |
-| Query rewriting | No | Static rewrite | **LLM rewrites per call** | Entity extraction |
-| Multi-hop | No | Weak | **Yes — decomposes** | Native |
-| Skip retrieval | No | No | **Yes (small talk, math)** | No |
-| Self-correction | No | No | **Yes — re-query if weak** | Limited |
-| Cost / query | $ | $$ | $$ | $$$ |
-| Setup effort | 1 day | 3 days | 1 week | 2–4 weeks |
+> **[Insert Streamlit Cloud URL here once deployed]**
+>
+> Bring your own free Gemini API key from
+> [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
 
-**Why this tier**: the use case is conversational document Q&A. Naive RAG
-breaks on multi-hop questions; Graph RAG is overkill for unstructured slides
-and prose. Agentic RAG is the sweet spot — handles multi-hop and ambiguous
-questions, and the architecture extends naturally to additional tools
-(`web_search`, `sql_query`, `calculator`) without rewriting the loop.
+The sample corpus is a small portfolio of Chen Wei's projects — load them
+in the Knowledge Base tab and try questions like:
+- *"Tell me about Chen Wei's production AI work"*
+- *"How does the reranker work in this project?"* (meta-recursive — the demo answers questions about itself)
+- *"What's the connection between the FYP's hybrid routing and Inside Advisory?"*
+
+Then load the sample eval set and click **▶ Run evaluation** to see Hit@k and MRR computed live.
 
 ---
 
-## Design decisions (and the reasoning)
+## Run locally
 
-### Chunking: 500 characters with 80-character overlap
+```bash
+git clone https://github.com/leechenwei/Agentic-RAG.git
+cd Agentic-RAG
 
-- **500 chars** ≈ one paragraph — long enough to contain a complete thought,
-  short enough to keep the embedding focused on a single topic
-- **80 chars overlap** (~16%) keeps boundary phrases intact across adjacent
-  chunks, so a phrase like "Software Engineer Intern at Dell" doesn't get
-  sliced
-- Character-based chunking was chosen for **demo clarity**. For production
-  I would switch to semantic / slide-aware chunking
-  (e.g. `RecursiveCharacterTextSplitter`, one chunk per slide for PPTX)
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-### Embedding model: `sentence-transformers/all-MiniLM-L6-v2`
+streamlit run app.py
+# → http://localhost:8501
+```
 
-- 384-dimensional output — strong accuracy-to-cost ratio
-- Runs locally on CPU — zero API cost for indexing
-- Deterministic — useful for reproducible eval runs
-- Production upgrade: `bge-large-en-v1.5` (1024 dims) for higher recall,
-  or `text-embedding-3-small` for managed simplicity
+Then paste your Gemini API key in the sidebar.
 
-### Vector database: ChromaDB (local, persistent)
-
-- Embedded, single-file deployment — no infrastructure for the demo
-- Cosine distance configured via `metadata={"hnsw:space": "cosine"}`
-- Stores metadata alongside vectors — citations come for free
-- Production upgrade: Qdrant or Pinecone for horizontal scaling and
-  multi-tenant isolation
-
-### Ingestion idempotency
-
-Stable IDs (`md5(filename:chunk_index:content_prefix)`) plus ChromaDB's
-`upsert` semantics mean re-running `ingest.py` is a no-op for unchanged
-content and only re-embeds new or modified chunks. Production would extend
-this to **delete chunks for files removed from the source directory** (the
-current implementation orphans them).
-
-### Agent loop: `MAX_AGENT_STEPS = 4`
-
-- Each step = one LLM call + optional `retrieve` call
-- Cap prevents runaway loops if the model gets confused
-- Tuned for Gemini free-tier (5 requests / minute) — production with paid
-  tier could raise to 8–10 for harder multi-hop questions
-
-### Rate-limit handling
-
-429 responses are caught and retried with backoff that honors the
-provider-suggested `retryDelay`. For production scale this would be replaced
-with a request queue and quota-aware throttling.
-
-### Citations
-
-Every retrieved chunk carries `source` and `chunk_index` metadata. The system
-prompt instructs the LLM to cite inline as `[source#chunkN]`. The UI also
-shows each retrieved chunk with its cosine-similarity score in the trace
-panel — so users can verify *which* chunk the answer came from, not just
-*that* it had a source.
-
-### Honest refusal
-
-The system prompt explicitly tells the model to say it does not know rather
-than fabricate when retrieved chunks don't contain the answer. This is
-validated in the eval suite by an "unanswerable question" test case.
+For convenience during local dev you can also set it in `.env`:
+```bash
+cp .env.example .env
+echo "GEMINI_API_KEY=your-key-here" >> .env
+```
+(The deployed version ignores env vars — users always BYOK.)
 
 ---
 
-## Testing & quality assurance
+## Tests
 
 ```bash
 pytest -v
 ```
 
-Three layers of test:
+| Test | What it checks |
+|---|---|
+| `test_production_retrieval_aggregate` | Hybrid + reranked pipeline must hit ≥90% recall@5 across the labeled cases |
+| `test_dense_only_recall_baseline` | Dense-only baseline ≥70% — used as a baseline to demonstrate the lift from hybrid + rerank |
+| `test_agent_end_to_end` (`@slow`) | Final agent answers must contain expected keywords or refuse for negative cases |
 
-1. **Retrieval recall@k** (`tests/test_retrieval.py::test_retrieval_recall_at_k`)
-   For each positive eval case, the expected source document must appear in
-   the top-k chunks. Aggregate threshold: ≥80% across all positives.
-
-2. **End-to-end agent answer** (`test_agent_end_to_end`)
-   Final answer must contain expected keywords (case-insensitive). Slow tier
-   (`@pytest.mark.slow`) because it hits the LLM.
-
-3. **Negative refusal** (case in `eval_dataset.py` with `expect_refusal: True`)
-   For a question whose answer is not in the corpus, the agent must produce
-   a refusal phrase (`"don't know"`, `"no information"`, etc.) and must not
-   fabricate. This is the single most important test — without it, the
-   system's failure mode is silent hallucination.
-
-The eval dataset (`tests/eval_dataset.py`) is the **source of truth for what
-"working" means**. Adding a new failure mode means adding a case here first.
+`tests/conftest.py` ingests `data/` into the test session's ephemeral Chroma
+once per pytest run, so tests don't depend on persistent state.
 
 ---
 
@@ -210,59 +144,87 @@ The eval dataset (`tests/eval_dataset.py`) is the **source of truth for what
 
 ```
 agentic_rag/
-├── app.py                       Streamlit UI
+├── app.py                          Streamlit UI (5 tabs)
 ├── requirements.txt
-├── .env.example
-├── README.md                    This file
+├── README.md
+├── .env.example                    (local-dev only; deployed version uses BYOK)
 │
-├── data/                        Source documents
-│   ├── maistorage_intro.txt     Candidate intro deck (extracted from PPTX)
-│   ├── rag_overview.txt         Reference: RAG concepts
-│   ├── vector_db_overview.txt   Reference: vector databases
-│   └── embeddings_overview.txt  Reference: embeddings
+├── data/                           Sample corpus (5 portfolio docs)
+│   ├── about_chen_wei.txt
+│   ├── inside_assistant_project.txt
+│   ├── agentic_rag_project.txt     ← meta: doc describing THIS app
+│   ├── fyp_dialogue_system.txt
+│   └── dell_internship.txt
 │
 ├── rag/
-│   ├── ingest.py                File → chunk → embed → ChromaDB
-│   ├── retriever.py             Cosine retrieval + source list/delete
-│   └── agent.py                 Gemini function-calling loop
+│   ├── session.py                  Per-session state (Chroma, BM25, API key, dataset)
+│   ├── ingest.py                   Parent-child chunking + recursive splitter
+│   ├── bm25_store.py               BM25 lexical index
+│   ├── retriever.py                Dense + BM25 + RRF + reranker pipeline
+│   ├── reranker.py                 BGE cross-encoder
+│   └── agent.py                    Streaming Gemini agent with retrieve tool
 │
-├── tests/
-│   ├── eval_dataset.py          Hand-curated Q&A pairs
-│   └── test_retrieval.py        pytest suite
+├── eval/
+│   ├── dataset_store.py            Session-scoped golden Q&A CRUD
+│   ├── runner.py                   Hit@k / MRR / keyword / refusal metrics
+│   ├── history.py                  Per-session run history with deltas
+│   └── golden_dataset.json         19 sample cases tied to the bundled docs
 │
-└── chroma_db/                   (auto-generated; gitignored)
+└── tests/
+    ├── conftest.py                 Ingests data/ into test session
+    ├── eval_dataset.py             Loads from golden_dataset.json (single source of truth)
+    └── test_retrieval.py
 ```
 
 ---
 
-## Limitations & next steps
+## Design decisions (and the reasoning)
 
-| Limitation | Production fix |
-|---|---|
-| Character chunking can split sentences | Semantic / sentence-aware splitting; per-slide chunking for PPTX |
-| Pure dense retrieval — misses exact identifiers and acronyms | Hybrid search: BM25 + dense, fused via Reciprocal Rank Fusion |
-| Top-k ordering relies solely on bi-encoder | Cross-encoder reranker on top 20 → top 4 |
-| Orphaned chunks when source files are deleted | Track ingested-files manifest; remove chunks whose source no longer exists |
-| Manual re-ingest required | File watcher (`watchdog`) or event-driven (S3 → SQS → worker) |
-| Single-process Streamlit | FastAPI + SSE streaming, horizontal scaling |
-| ChromaDB local cap (~1M vectors, single writer) | Qdrant Cloud / Pinecone / Weaviate |
-| No observability | LangFuse / Arize for traces, latency, cost, drift |
-| Eval thresholds are hand-coded | LLM-as-judge for answer faithfulness; RAGAS framework |
+### Why hybrid retrieval (dense + BM25) instead of pure dense?
+Dense embeddings blur exact-token matches — IDs, code identifiers, acronyms, version numbers all get treated as "generic invoice-like words." BM25 catches those literally. RRF combines the two rankings using only ranks (not raw scores), so the incompatible cosine and BM25 score scales never need normalizing. The constant `k=60` is from the original RRF paper.
+
+### Why a cross-encoder reranker?
+Bi-encoders (the dense retriever) embed query and doc independently — fast, but the embedding has to compress all possible meanings of a doc into one vector. Cross-encoders read query and doc *jointly* through the same model, so attention captures direct relevance. Far more accurate, but expensive — which is why we only run it on the top-20 candidates from broad retrieval.
+
+### Why parent-child chunking?
+Small chunks (~256 tokens) embed precisely — retrieval matches the right *passage*. Large chunks (~1024 tokens) give the LLM enough surrounding context to write a coherent answer. Parent-child lets us have both: embed children for retrieval precision, return parents to the LLM for context.
+
+### Why ephemeral per-session storage?
+Public demo on free-tier hosting + uploaded user documents = a privacy and cost minefield if persisted. Ephemeral storage means each browser session is isolated, nothing is logged server-side, and storage costs stay at zero. Users export their dataset/history as JSON if they want to save it.
+
+### Why BYOK (Bring Your Own Key)?
+A shared key on a public demo gets exhausted by the first curious visitor — Gemini's free tier is 25 requests/day. BYOK eliminates that abuse vector, eliminates the maintainer's API bill, and is the production-correct pattern. The trade-off (users need to get a key) is well-understood by the AI-tooling audience this demo targets.
+
+### Why streaming on the final turn only?
+Tool-calling turns can't be safely streamed — partial function-call structured output would garble the UI. We use a "peek-then-stream" approach: one non-streaming call to detect whether the turn is text or tool, then re-call with streaming for the final answer. Costs one extra LLM call on the final turn but gives a clean per-token typing UX.
 
 ---
 
 ## Tech stack
 
 - **Python 3.11+**
-- **Gemini 2.5 Flash** — LLM, function calling, low-cost
-- **sentence-transformers / all-MiniLM-L6-v2** — 384-dim embeddings, CPU
-- **ChromaDB** — embedded vector database with HNSW index
-- **Streamlit** — chat UI and document management
-- **pytest** — evaluation harness
+- **Streamlit** — UI
+- **ChromaDB** (ephemeral mode) — vector store
+- **sentence-transformers / all-MiniLM-L6-v2** — embeddings (384 dims, CPU)
+- **rank-bm25** — lexical retrieval
+- **BAAI/bge-reranker-base** — cross-encoder reranker
+- **LangChain text-splitters** — `RecursiveCharacterTextSplitter`
+- **Google Gemini SDK** — `gemini-2.5-flash` LLM
+- **pytest** — eval harness
+
+---
+
+## What's next
+
+- LLM-as-judge faithfulness scoring (RAGAS-style)
+- Adaptive routing — skip retrieval entirely for trivial queries
+- MCP server wrapping the `retrieve` tool
+- Multi-provider LLM abstraction (OpenAI / Claude alongside Gemini)
+- Cohere Rerank as a managed alternative to BGE
 
 ---
 
 ## Author
 
-**Chen Wei, Lee** — AI Engineer candidate
-[LinkedIn](https://linkedin.com/in/lcw02) · [GitHub](https://github.com/leechenwei)
+**Chen Wei, Lee** — AI Engineer · Malaysia
+[LinkedIn](https://linkedin.com/in/lcw02) · [GitHub](https://github.com/leechenwei) · LuisLCW02@gmail.com

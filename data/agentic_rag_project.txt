@@ -1,0 +1,77 @@
+This Project — A Self-Evaluating Agentic RAG
+
+The Pitch
+
+This is the application you are using right now. It is a NotebookLM-style
+RAG chatbot with one critical difference: it has a built-in evaluation
+workflow so you can prove the chatbot stays relevant as you tune chunking,
+embeddings, prompts, or models. Chen Wei built it as a portable demo of
+production AI engineering — and as the answer to a real interview
+question from DHL's AI Engineer assessment: "how do you make sure the RAG
+stays relevant?"
+
+Architecture
+
+The retrieval pipeline runs four stages, each independently testable:
+
+- Stage 1: Dense vector search over ChromaDB using all-MiniLM-L6-v2
+  (384-dim embeddings, HNSW index, cosine similarity).
+- Stage 2: BM25 lexical search over the same chunks, run in parallel.
+- Stage 3: Reciprocal Rank Fusion combines the two rankings using only
+  ranks — not raw scores — so the incompatible cosine and BM25 scales
+  don't need normalizing. The constant k=60 is from the 2009 RRF paper.
+- Stage 4: A BGE cross-encoder reranker (BAAI/bge-reranker-base) re-scores
+  the top-20 candidates jointly with the query, narrowing to the top 3-5
+  most relevant chunks before they reach the LLM.
+
+Parent-Child Chunking
+
+Documents are split with LangChain's RecursiveCharacterTextSplitter —
+small "child" chunks of about 256 characters for retrieval precision,
+nested inside larger "parent" blocks of about 1024 characters that are
+returned to the LLM. Best of both worlds: precise embedding match plus
+enough surrounding context to write a good answer.
+
+Agentic Loop
+
+The LLM is given a single `retrieve` tool and decides when and what to
+call. It can rewrite queries, retrieve multiple times for complex
+questions, decompose multi-part queries, or refuse honestly when the
+corpus has no answer. Gemini 2.5 Flash powers the agent; the final
+answer turn is streamed token-by-token to the user.
+
+The Eval Differentiator
+
+The user can curate a "golden dataset" of question-and-answer pairs that
+defines what *correct* looks like for their specific knowledge base.
+Running an evaluation measures:
+
+- Retrieval: Hit@k (was the expected source in top-k), Recall@k, and MRR
+  (Mean Reciprocal Rank of the first relevant doc).
+- Generation: keyword pass/fail per case, refusal accuracy on
+  out-of-corpus questions.
+
+Every run is timestamped, configuration snapshotted, and persisted to a
+history tab so the user can see metric deltas across changes — a clean
+regression-test view of their RAG.
+
+Multi-Tenancy and Privacy
+
+The deployed version uses an ephemeral, per-session ChromaDB. Every
+browser tab gets its own isolated vector store, dataset, and history.
+Nothing is logged or persisted server-side. Users bring their own LLM
+API key. They can export their session as JSON to save it locally.
+
+Stack
+
+Python, Streamlit, ChromaDB, rank-bm25, sentence-transformers,
+LangChain text splitters, Google Gemini SDK, pandas. Deployed on
+Streamlit Community Cloud.
+
+Why This Demo Matters
+
+It demonstrates that the candidate doesn't just *use* RAG — they have
+explicit opinions about hybrid retrieval, parent-child chunking,
+RRF over weighted scores, ephemeral multi-tenancy, and continuous
+evaluation as the answer to RAG quality drift. The demo is the
+argument.

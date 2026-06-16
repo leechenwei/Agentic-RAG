@@ -1,0 +1,5 @@
+[server]
+# Disable the module-walking file watcher. It trips over transformers'
+# lazy vision modules (which want torchvision — not installed, not needed).
+# Trade-off: no hot-reload on code edits; restart streamlit to pick up changes.
+fileWatcherType = "none"

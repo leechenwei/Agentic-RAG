@@ -1,0 +1,54 @@
+About Chen Wei, Lee
+
+Chen Wei (Luis) Lee is an AI Engineer and full-stack developer based in
+Malaysia. He focuses on building production-grade AI systems that ship to
+real users, with particular depth in Retrieval-Augmented Generation (RAG),
+agentic workflows, and LLM application engineering.
+
+Education
+
+Chen Wei is completing a Bachelor of Computer Science (Artificial
+Intelligence) at the University of Malaya in Kuala Lumpur, graduating in
+March 2026. He is on track with a CGPA of 3.80 out of 4.00 across the
+program.
+
+Current Role
+
+Since August 2025 he has been a Full-Stack Developer and AI Engineer at
+Inside Advisory Sdn Bhd in Puchong, Malaysia. His work there includes
+designing and shipping multi-service AI systems, RAG-powered internal
+assistants, automated financial pipelines, and a centralized SaaS-style
+platform serving five SME clients with measurable monthly recurring
+revenue. He owns the AI workload end to end — from vector store and
+embedding choice through to UI integration and evaluation.
+
+Prior Experience
+
+From July 2024 to January 2025 he interned as a Software Engineer at
+Dell Technologies in Cyberjaya, Malaysia, on an agentless database
+monitoring system serving Oracle and other enterprise database
+environments.
+
+Technical Strengths
+
+His core stack is Python, TypeScript / JavaScript, Next.js, React, Flask
+and FastAPI on the application side, and LangChain, LangGraph, RAG
+pipelines, prompt engineering, ChromaDB and pgvector, BM25 and
+cross-encoder rerankers, and Claude / Gemini / OpenAI LLM integration on
+the AI side. Operational tooling includes Git, Docker, Linux, Kubernetes,
+Vercel, Supabase, Upstash Redis, and n8n for workflow automation. He
+also has practical exposure to Scikit-learn, Pandas, NumPy, PyTorch,
+and TensorFlow.
+
+Languages
+
+He is fluent in Mandarin Chinese and English, and conversational in
+Bahasa Melayu — a useful combination for Southeast Asia roles and for
+multinational teams whose customers or documents are bilingual.
+
+Contact
+
+Email: LuisLCW02@gmail.com
+LinkedIn: linkedin.com/in/lcw02
+GitHub: github.com/leechenwei
+Phone: +60 16-2193255

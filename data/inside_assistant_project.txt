@@ -1,0 +1,64 @@
+Inside Platform and Inside-Assistant — Production AI at Inside Advisory
+
+The Pain Point
+
+Inside Advisory is a Malaysian consultancy serving SME clients across
+operational, financial, and customer-facing functions. Before Chen Wei
+joined, much of the recurring work — WhatsApp activity logs, Excel-based
+trip planning, manual check-ins, commission tracking, P&L processing —
+was done by hand. Information lived in chat threads, spreadsheets, and
+people's heads. Searching, reporting, and onboarding new clients all
+suffered.
+
+Inside Platform — The Foundation
+
+Chen Wei designed and built "Inside Platform," a centralized Next.js +
+Supabase ecosystem that consolidates these workflows for five SME clients
+and contributes more than RM10,000 in monthly recurring revenue. The
+platform digitized the previously asynchronous manual processes into
+real-time, automated workflows, eliminating 100% of the legacy manual
+recording friction.
+
+The system is multi-service: Hono.js handles backend APIs, Evolution
+API integrates WhatsApp messaging, and a custom Claude-powered memory
+layer maintains context across distributed conversations and operational
+events.
+
+Inside-Assistant — The RAG Layer
+
+Inside-Assistant is the internal AI assistant integrated with Lark,
+Inside Advisory's team-collaboration platform. It is built on
+Retrieval-Augmented Generation and exposes the company's internal
+documents to staff through natural-language queries.
+
+The assistant supports three workflow categories:
+
+- Document generation. Staff can ask the assistant to draft client
+  reports, internal memos, and onboarding documents grounded in the
+  team's accumulated knowledge.
+- Scheduling. The assistant reads calendar and task context and helps
+  coordinate meetings.
+- Tool-calling. The LLM decides when to invoke specific internal tools —
+  checking a project status, pulling a financial summary, looking up a
+  client record — rather than answering from memory.
+
+Automated Financial Pipelines
+
+Alongside the assistant, Chen Wei built financial automation pipelines
+using n8n and Express with custom JavaScript logic. These automate the
+production of P&L statements and balance sheets — work that previously
+required hours of manual spreadsheet wrangling per client per month.
+
+Stack
+
+Next.js, React, TypeScript, Supabase (Postgres with pgvector for
+embeddings), Hono.js, Express, Evolution API, Lark integrations, Claude
+for the LLM layer, n8n for visual workflow automation, and Vercel for
+deployment.
+
+Outcome
+
+A consultancy that previously ran on chat threads and spreadsheets now
+runs on a unified AI-augmented platform, with measurable monthly revenue
+attached. The work demonstrates production AI engineering at SME scale —
+not a research demo, but a system real users depend on daily.

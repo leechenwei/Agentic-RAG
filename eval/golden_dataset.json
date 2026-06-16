@@ -1,0 +1,149 @@
+[
+  {
+    "id": "about01",
+    "question": "Where did Chen Wei get his degree?",
+    "expected_source": "about_chen_wei.txt",
+    "expected_keywords": ["university of malaya"],
+    "expect_refusal": false
+  },
+  {
+    "id": "about02",
+    "question": "What is Chen Wei's CGPA?",
+    "expected_source": "about_chen_wei.txt",
+    "expected_keywords": ["3.80"],
+    "expect_refusal": false
+  },
+  {
+    "id": "about03",
+    "question": "What languages does Chen Wei speak?",
+    "expected_source": "about_chen_wei.txt",
+    "expected_keywords": ["mandarin", "english"],
+    "expect_refusal": false
+  },
+  {
+    "id": "about04",
+    "question": "Where does Chen Wei currently work?",
+    "expected_source": "about_chen_wei.txt",
+    "expected_keywords": ["inside advisory"],
+    "expect_refusal": false
+  },
+  {
+    "id": "ia01",
+    "question": "What is Inside-Assistant?",
+    "expected_source": "inside_assistant_project.txt",
+    "expected_keywords": ["rag", "lark"],
+    "expect_refusal": false
+  },
+  {
+    "id": "ia02",
+    "question": "How many SME clients does the Inside Platform serve?",
+    "expected_source": "inside_assistant_project.txt",
+    "expected_keywords": ["five"],
+    "expect_refusal": false
+  },
+  {
+    "id": "ia03",
+    "question": "How much monthly recurring revenue does the Inside Platform contribute?",
+    "expected_source": "inside_assistant_project.txt",
+    "expected_keywords": ["rm10,000"],
+    "expect_refusal": false
+  },
+  {
+    "id": "ia04",
+    "question": "What three workflow categories does Inside-Assistant support?",
+    "expected_source": "inside_assistant_project.txt",
+    "expected_keywords": ["document generation", "scheduling", "tool-calling"],
+    "expect_refusal": false
+  },
+  {
+    "id": "rag01",
+    "question": "What retrieval strategy does this RAG project use?",
+    "expected_source": "agentic_rag_project.txt",
+    "expected_keywords": ["hybrid"],
+    "expect_refusal": false
+  },
+  {
+    "id": "rag02",
+    "question": "What reranker does this project use?",
+    "expected_source": "agentic_rag_project.txt",
+    "expected_keywords": ["bge"],
+    "expect_refusal": false
+  },
+  {
+    "id": "rag03",
+    "question": "What chunking strategy does this RAG project use?",
+    "expected_source": "agentic_rag_project.txt",
+    "expected_keywords": ["parent-child"],
+    "expect_refusal": false
+  },
+  {
+    "id": "rag04",
+    "question": "Which metrics does the built-in evaluation compute?",
+    "expected_source": "agentic_rag_project.txt",
+    "expected_keywords": ["hit@k", "mrr"],
+    "expect_refusal": false
+  },
+  {
+    "id": "fyp01",
+    "question": "What was Chen Wei's final year project about?",
+    "expected_source": "fyp_dialogue_system.txt",
+    "expected_keywords": ["dialogue", "rasa"],
+    "expect_refusal": false
+  },
+  {
+    "id": "fyp02",
+    "question": "Why does the FYP use both Rasa NLU and an LLM?",
+    "expected_source": "fyp_dialogue_system.txt",
+    "expected_keywords": ["fallback"],
+    "expect_refusal": false
+  },
+  {
+    "id": "fyp03",
+    "question": "What is the hybrid NLU routing pattern in the FYP?",
+    "expected_source": "fyp_dialogue_system.txt",
+    "expected_keywords": ["rasa", "llm"],
+    "expect_refusal": false
+  },
+  {
+    "id": "dell01",
+    "question": "What did Chen Wei build at Dell Technologies?",
+    "expected_source": "dell_internship.txt",
+    "expected_keywords": ["database", "monitoring"],
+    "expect_refusal": false
+  },
+  {
+    "id": "dell02",
+    "question": "When did Chen Wei intern at Dell?",
+    "expected_source": "dell_internship.txt",
+    "expected_keywords": ["2024"],
+    "expect_refusal": false
+  },
+  {
+    "id": "dell03",
+    "question": "How many database types did the Dell monitoring system support?",
+    "expected_source": "dell_internship.txt",
+    "expected_keywords": ["three"],
+    "expect_refusal": false
+  },
+  {
+    "id": "multi01",
+    "question": "How does the hybrid routing idea from the FYP connect to what Chen Wei does at Inside Advisory?",
+    "expected_source": "fyp_dialogue_system.txt",
+    "expected_keywords": ["routing"],
+    "expect_refusal": false
+  },
+  {
+    "id": "refuse01",
+    "question": "What is the airspeed velocity of an unladen swallow?",
+    "expected_source": null,
+    "expected_keywords": [],
+    "expect_refusal": true
+  },
+  {
+    "id": "refuse02",
+    "question": "What is Chen Wei's home address?",
+    "expected_source": null,
+    "expected_keywords": [],
+    "expect_refusal": true
+  }
+]
