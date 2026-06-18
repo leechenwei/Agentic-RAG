@@ -65,7 +65,8 @@ stops being a vibe check and becomes a number you can graph.
 
 ### Agentic loop
 - Gemini 2.5 Flash with function-calling — the LLM decides when to retrieve, what query to use, whether to retrieve again, and when to answer
-- **Streaming output** — tokens appear as they arrive (peek-then-stream architecture)
+- **Non-streaming path** orchestrated by an explicit **LangGraph StateGraph** (`llm → conditional → tools → llm` loop with conditional edges, visualizable, durable-execution-ready)
+- **Streaming chat path** uses direct Gemini SDK with peek-then-stream — per-token streaming wants direct SDK control that LangGraph's stream API doesn't yet give without a ChatModel adapter. Same tool, same trace shape, different engine.
 - Multi-step retrieval with query rewriting and honest refusal
 
 ### Self-evaluation (the differentiator)
@@ -209,7 +210,8 @@ Tool-calling turns can't be safely streamed — partial function-call structured
 - **rank-bm25** — lexical retrieval
 - **BAAI/bge-reranker-base** — cross-encoder reranker
 - **LangChain text-splitters** — `RecursiveCharacterTextSplitter`
-- **Google Gemini SDK** — `gemini-2.5-flash` LLM
+- **LangGraph** — explicit `StateGraph` for the non-streaming agent loop
+- **Google Gemini SDK** — `gemini-2.5-flash` LLM (direct SDK for the streaming chat path)
 - **pytest** — eval harness
 
 ---

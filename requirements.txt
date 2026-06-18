@@ -1,5 +1,9 @@
 google-genai>=1.0.0
 chromadb>=0.5.0
+# pysqlite3-binary shims modern sqlite3 in for ChromaDB on hosts (Streamlit
+# Cloud, some older Linux distros) whose system sqlite3 is too old.
+# The rag/__init__.py shim swaps it in BEFORE chromadb imports.
+pysqlite3-binary>=0.5.0; sys_platform == "linux"
 sentence-transformers>=3.0.0
 streamlit>=1.40.0
 pypdf>=5.0.0
@@ -8,4 +12,5 @@ python-dotenv>=1.0.0
 pytest>=8.0.0
 rank-bm25>=0.2.2
 langchain-text-splitters>=0.3.0
+langgraph>=0.2.0
 pandas>=2.0.0

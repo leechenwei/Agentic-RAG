@@ -9,19 +9,34 @@ The LLM is given a `retrieve` tool and decides:
 Retrieval pipeline used by the tool:
   hybrid (dense + BM25 + RRF)  →  rerank (BGE cross-encoder)  →  return PARENTS
 
-Two entry points:
-  - run_agent(question)        : non-streaming, returns full AgentTrace
-  - run_agent_stream(question) : streaming, yields tokens then final AgentTrace
+Two entry points with DIFFERENT orchestration choices:
+
+  - run_agent(question)        : non-streaming, used by tests + eval runner.
+                                  Driven by an explicit LangGraph StateGraph
+                                  with named nodes (llm → conditional → tools
+                                  → llm). Graph is visualizable and durable-
+                                  ready (checkpointing / HITL can be added
+                                  with minor changes).
+
+  - run_agent_stream(question) : streaming, used by the chat UI. Hand-written
+                                  peek-then-stream loop because per-token
+                                  streaming wants direct Gemini SDK control —
+                                  LangGraph's stream API doesn't give per-token
+                                  granularity without a ChatModel adapter.
+
+Both paths execute the same tool and produce the same AgentTrace shape, so
+callers don't care which engine ran underneath.
 """
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Iterator, TypedDict
 
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
+from langgraph.graph import END, StateGraph
 
 from .retriever import RetrievedChunk, retrieve_hybrid_reranked, to_llm_context
 from .session import require_api_key
@@ -153,45 +168,124 @@ def _execute_tool(
 
 
 # ---------------------------------------------------------------------------
-# Non-streaming agent (original behavior, used by tests)
+# Non-streaming agent — orchestrated by a LangGraph StateGraph
 # ---------------------------------------------------------------------------
+#
+# The graph:
+#
+#                          ┌──────────┐
+#       (entry) ──────────►│   llm    │
+#                          └────┬─────┘
+#                               │
+#                  ┌────────────┴────────────┐
+#                  │                         │
+#               tool_calls?               text answer?
+#                  │                         │
+#                  ▼                         ▼
+#             ┌─────────┐                  END
+#             │  tools  │
+#             └────┬────┘
+#                  │
+#         step < MAX_AGENT_STEPS?
+#                  │
+#         yes ─────┘ no
+#          │         │
+#          ▼         ▼
+#         llm       END
+#
+# Why LangGraph here: explicit state, named nodes that are independently
+# testable, conditional edges, free graph visualization for the README, and
+# a clean migration path to durable execution / human-in-the-loop / multi-
+# agent later (each is a `graph.add_*` line, not a rewrite).
+
+
+class _AgentGraphState(TypedDict, total=False):
+    """State threaded between LangGraph nodes."""
+    contents: list           # Gemini Content accumulator
+    pending_tool_calls: list # function_call objects waiting to execute
+    trace: AgentTrace        # mutated as the graph runs
+    config: object           # GenerateContentConfig (stays constant)
+
+
+def _llm_node(state: _AgentGraphState) -> _AgentGraphState:
+    """Call the LLM once. Either produces tool calls or a final text answer."""
+    client = genai.Client(api_key=require_api_key())
+    state["trace"].steps += 1
+    resp = _call_with_retry(
+        client.models.generate_content,
+        model=MODEL, contents=state["contents"], config=state["config"],
+    )
+    candidate = resp.candidates[0]
+    parts = candidate.content.parts or []
+    function_calls = [p.function_call for p in parts if p.function_call]
+    if function_calls:
+        # Tool turn — record the model's turn so subsequent calls see it
+        state["contents"].append(candidate.content)
+        state["pending_tool_calls"] = function_calls
+    else:
+        # Text turn — final answer
+        state["trace"].answer = "".join(p.text for p in parts if p.text)
+        state["pending_tool_calls"] = []
+    return state
+
+
+def _tools_node(state: _AgentGraphState) -> _AgentGraphState:
+    """Execute every pending tool call and append the responses to contents."""
+    response_parts = [
+        _execute_tool(fc, state["trace"]) for fc in state["pending_tool_calls"]
+    ]
+    state["contents"].append(types.Content(role="user", parts=response_parts))
+    state["pending_tool_calls"] = []
+    return state
+
+
+def _route_after_llm(state: _AgentGraphState) -> str:
+    """Conditional edge — if the LLM emitted tool calls, run them; else end."""
+    return "tools" if state.get("pending_tool_calls") else END
+
+
+def _route_after_tools(state: _AgentGraphState) -> str:
+    """Conditional edge — loop back to LLM unless we've hit the step cap."""
+    return END if state["trace"].steps >= MAX_AGENT_STEPS else "llm"
+
+
+def _build_graph():
+    """Compile the LangGraph state machine. Cached at module load."""
+    g = StateGraph(_AgentGraphState)
+    g.add_node("llm", _llm_node)
+    g.add_node("tools", _tools_node)
+    g.set_entry_point("llm")
+    g.add_conditional_edges("llm", _route_after_llm, {"tools": "tools", END: END})
+    g.add_conditional_edges("tools", _route_after_tools, {"llm": "llm", END: END})
+    return g.compile()
+
+
+_AGENT_GRAPH = _build_graph()
+
 
 def run_agent(question: str, history: list[dict] | None = None) -> AgentTrace:
-    """Run the agent loop. Returns full AgentTrace with the final answer."""
-    client = genai.Client(api_key=require_api_key())
+    """Run the LangGraph-orchestrated agent loop. Returns AgentTrace."""
     trace = AgentTrace()
-
     contents = _history_to_contents(history or [])
     contents.append(
         types.Content(role="user", parts=[types.Part.from_text(text=question)])
     )
-
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
         tools=[RETRIEVE_TOOL],
         temperature=0.2,
     )
 
-    for step in range(MAX_AGENT_STEPS):
-        trace.steps = step + 1
-        resp = _call_with_retry(
-            client.models.generate_content,
-            model=MODEL, contents=contents, config=config,
-        )
-        candidate = resp.candidates[0]
-        parts = candidate.content.parts or []
-        function_calls = [p.function_call for p in parts if p.function_call]
-
-        if not function_calls:
-            trace.answer = "".join(p.text for p in parts if p.text)
-            return trace
-
-        contents.append(candidate.content)
-        response_parts = [_execute_tool(fc, trace) for fc in function_calls]
-        contents.append(types.Content(role="user", parts=response_parts))
-
-    trace.answer = "(agent hit max steps without producing a final answer)"
-    return trace
+    final_state = _AGENT_GRAPH.invoke({
+        "contents": contents,
+        "pending_tool_calls": [],
+        "trace": trace,
+        "config": config,
+    })
+    final_trace: AgentTrace = final_state["trace"]
+    if not final_trace.answer:
+        final_trace.answer = "(agent hit max steps without producing a final answer)"
+    return final_trace
 
 
 # ---------------------------------------------------------------------------
